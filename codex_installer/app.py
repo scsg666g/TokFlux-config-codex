@@ -34,6 +34,24 @@ class CodexInstallerApp:
         self.root.geometry(WINDOW_SIZE)
         self.root.minsize(*WINDOW_MIN_SIZE)
         self.root.resizable(True, True)
+        self.colors = {
+            "bg": "#f3fbff",
+            "panel": "#ffffff",
+            "panel_tint": "#eef8ff",
+            "entry": "#fbfdff",
+            "entry_readonly": "#f7fbff",
+            "border": "#b9ddf5",
+            "text": "#172033",
+            "muted": "#526477",
+            "cyan": "#30b0f0",
+            "cyan_dark": "#087ea4",
+            "purple": "#6d4de8",
+            "purple_dark": "#5032c8",
+            "magenta": "#c43fd9",
+            "disabled_bg": "#d8e1e8",
+            "disabled_fg": "#7b8794",
+        }
+        self.configure_styles()
 
         self.status_var = tk.StringVar(value="请先进行环境测试")
         self.node_var = tk.StringVar(value="Node.js：未检查")
@@ -46,6 +64,131 @@ class CodexInstallerApp:
         self.build_context_menu()
         self.show_startup_splash()
         self.root.after(100, self.drain_output_queue)
+
+    def configure_styles(self):
+        self.root.configure(bg=self.colors["bg"])
+        self.style = ttk.Style(self.root)
+        try:
+            self.style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        self.style.configure("App.TFrame", background=self.colors["bg"])
+        self.style.configure("TFrame", background=self.colors["bg"])
+        self.style.configure(
+            "TLabelframe",
+            background=self.colors["panel_tint"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["cyan"],
+            darkcolor=self.colors["border"],
+            relief=tk.SOLID,
+        )
+        self.style.configure(
+            "TLabelframe.Label",
+            background=self.colors["bg"],
+            foreground=self.colors["purple_dark"],
+            font=("Microsoft YaHei UI", 9, "bold"),
+        )
+        self.style.configure(
+            "TLabel",
+            background=self.colors["bg"],
+            foreground=self.colors["text"],
+            font=("Microsoft YaHei UI", 9),
+        )
+        self.style.configure(
+            "Title.TLabel",
+            background=self.colors["bg"],
+            foreground=self.colors["purple_dark"],
+            font=("Microsoft YaHei UI", 15, "bold"),
+        )
+        self.style.configure(
+            "Subtitle.TLabel",
+            background=self.colors["bg"],
+            foreground=self.colors["muted"],
+        )
+        self.style.configure(
+            "Form.TLabel",
+            background=self.colors["bg"],
+            foreground=self.colors["text"],
+            font=("Microsoft YaHei UI", 10),
+        )
+        self.style.configure(
+            "StatusBody.TLabel",
+            background=self.colors["panel_tint"],
+            foreground=self.colors["text"],
+        )
+        self.style.configure(
+            "StatusValue.TLabel",
+            background=self.colors["panel_tint"],
+            foreground=self.colors["cyan_dark"],
+        )
+        self.style.configure(
+            "TEntry",
+            fieldbackground=self.colors["entry"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["cyan"],
+            darkcolor=self.colors["border"],
+            foreground=self.colors["text"],
+            insertcolor=self.colors["cyan_dark"],
+        )
+        self.style.map(
+            "TEntry",
+            fieldbackground=[
+                ("readonly", self.colors["entry_readonly"]),
+                ("disabled", self.colors["disabled_bg"]),
+            ],
+            foreground=[("disabled", self.colors["disabled_fg"])],
+        )
+        self.style.configure(
+            "TButton",
+            font=("Microsoft YaHei UI", 9),
+            padding=(12, 4),
+            background="#e8f6ff",
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+            lightcolor="#dff4ff",
+            darkcolor=self.colors["border"],
+        )
+        self.style.map(
+            "TButton",
+            background=[
+                ("active", "#d8f0ff"),
+                ("disabled", self.colors["disabled_bg"]),
+            ],
+            foreground=[("disabled", self.colors["disabled_fg"])],
+        )
+        self.style.configure(
+            "Accent.TButton",
+            background=self.colors["cyan"],
+            foreground="#ffffff",
+            bordercolor=self.colors["cyan_dark"],
+            lightcolor="#8ee3ff",
+            darkcolor=self.colors["cyan_dark"],
+        )
+        self.style.map(
+            "Accent.TButton",
+            background=[
+                ("active", "#24a5e8"),
+                ("disabled", self.colors["disabled_bg"]),
+            ],
+            foreground=[("disabled", self.colors["disabled_fg"])],
+        )
+        self.style.configure(
+            "Purple.TButton",
+            background=self.colors["purple"],
+            foreground="#ffffff",
+            bordercolor=self.colors["purple_dark"],
+            lightcolor="#b5a4ff",
+            darkcolor=self.colors["purple_dark"],
+        )
+        self.style.map(
+            "Purple.TButton",
+            background=[
+                ("active", "#5c3fe0"),
+                ("disabled", self.colors["disabled_bg"]),
+            ],
+            foreground=[("disabled", self.colors["disabled_fg"])],
+        )
 
     def set_window_icon(self):
         if not LOGO_PATH.exists():
@@ -157,43 +300,48 @@ class CodexInstallerApp:
         return "*" * 28
 
     def build_ui(self):
-        main = ttk.Frame(self.root, padding=16)
+        main = ttk.Frame(self.root, padding=16, style="App.TFrame")
         main.pack(fill=tk.BOTH, expand=True)
 
-        top = ttk.Frame(main)
+        top = ttk.Frame(main, style="App.TFrame")
         top.pack(fill=tk.X)
         top.columnconfigure(0, minsize=360)
         top.columnconfigure(1, weight=1)
 
-        left_panel = ttk.Frame(top)
+        left_panel = ttk.Frame(top, style="App.TFrame")
         left_panel.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 18))
 
-        input_panel = ttk.Frame(top, padding=(0, 20, 0, 0))
+        input_panel = ttk.Frame(top, padding=(0, 20, 0, 0), style="App.TFrame")
         input_panel.grid(row=0, column=1, sticky=tk.NE)
 
-        title = ttk.Label(left_panel, text=APP_TITLE, font=("Microsoft YaHei UI", 14, "bold"))
+        title = ttk.Label(left_panel, text=APP_TITLE, style="Title.TLabel")
         title.pack(anchor=tk.W)
+
+        accent_row = tk.Frame(left_panel, bg=self.colors["bg"], height=3)
+        accent_row.pack(anchor=tk.W, pady=(7, 0))
+        tk.Frame(accent_row, bg=self.colors["cyan"], width=74, height=3).pack(side=tk.LEFT)
+        tk.Frame(accent_row, bg=self.colors["purple"], width=42, height=3).pack(side=tk.LEFT)
+        tk.Frame(accent_row, bg=self.colors["magenta"], width=28, height=3).pack(side=tk.LEFT)
 
         subtitle = ttk.Label(
             left_panel,
             text="检测 Node.js 和 npm 后，安装 @openai/codex。",
-            foreground="#555555",
+            style="Subtitle.TLabel",
         )
-        subtitle.pack(anchor=tk.W, pady=(4, 12))
+        subtitle.pack(anchor=tk.W, pady=(7, 12))
 
         status_box = ttk.LabelFrame(left_panel, text="环境状态", padding=10)
         status_box.pack(anchor=tk.W, fill=tk.X)
 
-        ttk.Label(status_box, textvariable=self.node_var).pack(anchor=tk.W)
-        ttk.Label(status_box, textvariable=self.npm_var).pack(anchor=tk.W, pady=(4, 0))
-        ttk.Label(status_box, textvariable=self.status_var, foreground="#0f766e").pack(
+        ttk.Label(status_box, textvariable=self.node_var, style="StatusBody.TLabel").pack(anchor=tk.W)
+        ttk.Label(status_box, textvariable=self.npm_var, style="StatusBody.TLabel").pack(anchor=tk.W, pady=(4, 0))
+        ttk.Label(status_box, textvariable=self.status_var, style="StatusValue.TLabel").pack(
             anchor=tk.W, pady=(8, 0)
         )
 
-        form_label_font = ("Microsoft YaHei UI", 10)
         form_entry_font = ("Microsoft YaHei UI", 10)
 
-        ttk.Label(input_panel, text="API 请求地址：", font=form_label_font).grid(
+        ttk.Label(input_panel, text="API 请求地址：", style="Form.TLabel").grid(
             row=0,
             column=0,
             sticky=tk.E,
@@ -216,7 +364,7 @@ class CodexInstallerApp:
             ipady=2,
         )
 
-        ttk.Label(input_panel, text="API Key：", font=form_label_font).grid(
+        ttk.Label(input_panel, text="API Key：", style="Form.TLabel").grid(
             row=1,
             column=0,
             sticky=tk.E,
@@ -234,14 +382,20 @@ class CodexInstallerApp:
             input_panel,
             text="修改 API Key",
             command=self.show_api_key_dialog,
+            style="Purple.TButton",
         )
         self.save_config_button.grid(row=1, column=2, sticky=tk.E, padx=(8, 0))
         input_panel.columnconfigure(1, weight=1)
 
-        button_row = ttk.Frame(main)
+        button_row = ttk.Frame(main, style="App.TFrame")
         button_row.pack(fill=tk.X, pady=12)
 
-        self.check_button = ttk.Button(button_row, text="环境测试", command=self.check_environment)
+        self.check_button = ttk.Button(
+            button_row,
+            text="环境测试",
+            command=self.check_environment,
+            style="Accent.TButton",
+        )
         self.check_button.pack(side=tk.LEFT)
 
         self.install_button = ttk.Button(
@@ -261,6 +415,16 @@ class CodexInstallerApp:
             wrap=tk.WORD,
             state=tk.DISABLED,
             font=("Consolas", 9),
+            background=self.colors["panel"],
+            foreground=self.colors["text"],
+            insertbackground=self.colors["cyan_dark"],
+            selectbackground="#c9efff",
+            selectforeground=self.colors["text"],
+            relief=tk.SOLID,
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["cyan"],
         )
         self.log.pack(fill=tk.BOTH, expand=True)
 
