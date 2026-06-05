@@ -9,6 +9,7 @@ WINDOW_MIN_SIZE = (480, 320)
 LOGO_PATH = PROJECT_ROOT / "logo.png"
 
 PACKAGE_NAME = "@openai/codex"
+CLAUDE_PACKAGE_NAME = "@anthropic-ai/claude-code"
 REGISTRY_URL = "https://registry.npmmirror.com"
 
 INSTALL_COMMAND_ARGS = [
@@ -18,9 +19,16 @@ INSTALL_COMMAND_ARGS = [
     f"--registry={REGISTRY_URL}",
 ]
 
+CLAUDE_INSTALL_COMMAND_ARGS = [
+    "install",
+    "-g",
+    CLAUDE_PACKAGE_NAME,
+    f"--registry={REGISTRY_URL}",
+]
+
 NODE_DOWNLOAD_URL = "https://nodejs.org/"
 NODE_WINGET_PACKAGE_ID = "OpenJS.NodeJS.LTS"
-API_BASE_URL = "http://tokenflux.cloud/v1"
+API_BASE_URL = "http://tokenflux.cloud"
 API_TEST_TIMEOUT = 15
 API_TEST_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

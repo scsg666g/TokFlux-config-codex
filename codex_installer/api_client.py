@@ -19,6 +19,28 @@ def normalize_base_url(base_url):
     return base_url.rstrip("/") + "/"
 
 
+def ensure_v1_base_url(base_url):
+    stripped = base_url.rstrip("/")
+    if not stripped:
+        return ""
+
+    if stripped.endswith("/v1"):
+        return stripped
+
+    return stripped + "/v1"
+
+
+def ensure_root_base_url(base_url):
+    stripped = base_url.rstrip("/")
+    if not stripped:
+        return ""
+
+    if stripped.endswith("/v1"):
+        return stripped[:-3].rstrip("/")
+
+    return stripped
+
+
 def build_models_url(base_url):
     return urljoin(normalize_base_url(base_url), "models")
 
@@ -62,6 +84,56 @@ def test_openai_connection(base_url, api_key):
 
     try:
         data = json.loads(body)
+    except json.JSONDecodeError:
+        return ApiTestResult(True, "连接成功：接口已返回内容", trim_detail(body))
+
+    return ApiTestResult(True, "连接成功")
+
+
+def test_codex_connection(base_url, api_key):
+    return test_openai_connection(ensure_v1_base_url(base_url), api_key)
+
+
+def test_claude_connection(base_url, api_key):
+    if not base_url:
+        return ApiTestResult(False, "连接失败：API 请求地址不能为空")
+
+    if not api_key:
+        return ApiTestResult(False, "连接失败：key 不能为空")
+
+    request = Request(
+        build_models_url(ensure_v1_base_url(ensure_root_base_url(base_url))),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+            "User-Agent": API_TEST_USER_AGENT,
+            "anthropic-version": "2023-06-01",
+        },
+        method="GET",
+    )
+
+    try:
+        with urlopen(request, timeout=API_TEST_TIMEOUT) as response:
+            body = response.read().decode("utf-8", errors="replace").strip()
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace").strip()
+        return ApiTestResult(
+            False,
+            f"连接失败：HTTP {exc.code}",
+            trim_detail(detail),
+        )
+    except URLError as exc:
+        return ApiTestResult(False, f"连接失败：{exc.reason}")
+    except TimeoutError:
+        return ApiTestResult(False, "连接失败：请求超时")
+    except OSError as exc:
+        return ApiTestResult(False, f"连接失败：{exc}")
+
+    if not body:
+        return ApiTestResult(False, "连接失败：接口没有返回内容")
+
+    try:
+        json.loads(body)
     except json.JSONDecodeError:
         return ApiTestResult(True, "连接成功：接口已返回内容", trim_detail(body))
 

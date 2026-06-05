@@ -10,6 +10,10 @@ PROVIDER_NAME = "custom"
 LEGACY_PROVIDER_IDS = ("tokenflux",)
 API_KEY_ENV_NAME = "OPENAI_API_KEY"
 API_BASE_URL_ENV_NAME = "OPENAI_BASE_URL"
+CLAUDE_AUTH_TOKEN_ENV_NAME = "ANTHROPIC_AUTH_TOKEN"
+CLAUDE_BASE_URL_ENV_NAME = "ANTHROPIC_BASE_URL"
+CLAUDE_MODEL_DISCOVERY_ENV_NAME = "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"
+CLAUDE_BASE_URL = "http://tokenflux.cloud"
 
 
 def get_codex_home():
@@ -28,6 +32,14 @@ def get_auth_path():
     return get_codex_home() / "auth.json"
 
 
+def get_claude_home():
+    return Path.home() / ".claude"
+
+
+def get_claude_settings_path():
+    return get_claude_home() / "settings.json"
+
+
 def read_saved_api_key():
     auth_path = get_auth_path()
     if auth_path.exists():
@@ -41,6 +53,35 @@ def read_saved_api_key():
             return api_key.strip()
 
     return os.environ.get(API_KEY_ENV_NAME, "").strip()
+
+
+def read_saved_claude_api_key():
+    settings_path = get_claude_settings_path()
+    if settings_path.exists():
+        try:
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+
+        env = data.get("env", {})
+        if isinstance(env, dict):
+            api_key = env.get(CLAUDE_AUTH_TOKEN_ENV_NAME, "")
+            if isinstance(api_key, str) and api_key.strip():
+                return api_key.strip()
+
+    return os.environ.get(CLAUDE_AUTH_TOKEN_ENV_NAME, "").strip()
+
+
+def read_claude_settings(settings_path):
+    if not settings_path.exists():
+        return {}
+
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        data = {}
+
+    return data if isinstance(data, dict) else {}
 
 
 def write_codex_settings(base_url, api_key, persist_environment=True):
@@ -58,6 +99,36 @@ def write_codex_settings(base_url, api_key, persist_environment=True):
         write_user_environment(base_url, api_key)
 
     return config_path, auth_path
+
+
+def write_claude_settings(api_key, persist_environment=True):
+    claude_home = get_claude_home()
+    claude_home.mkdir(parents=True, exist_ok=True)
+
+    settings_path = get_claude_settings_path()
+    data = read_claude_settings(settings_path)
+    env = data.get("env", {})
+    if not isinstance(env, dict):
+        env = {}
+
+    env[CLAUDE_AUTH_TOKEN_ENV_NAME] = api_key
+    env[CLAUDE_BASE_URL_ENV_NAME] = CLAUDE_BASE_URL
+    env[CLAUDE_MODEL_DISCOVERY_ENV_NAME] = "1"
+    data["env"] = env
+    data["includeCoAuthoredBy"] = False
+    data["theme"] = "dark"
+
+    settings_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    write_process_claude_environment(api_key)
+
+    if persist_environment:
+        write_user_claude_environment(api_key)
+
+    return settings_path
 
 
 def write_config_toml(config_path, base_url):
@@ -158,6 +229,12 @@ def write_process_environment(base_url, api_key):
     os.environ[API_BASE_URL_ENV_NAME] = base_url
 
 
+def write_process_claude_environment(api_key):
+    os.environ[CLAUDE_AUTH_TOKEN_ENV_NAME] = api_key
+    os.environ[CLAUDE_BASE_URL_ENV_NAME] = CLAUDE_BASE_URL
+    os.environ[CLAUDE_MODEL_DISCOVERY_ENV_NAME] = "1"
+
+
 def write_user_environment(base_url, api_key):
     if not sys.platform.startswith("win"):
         return
@@ -172,6 +249,25 @@ def write_user_environment(base_url, api_key):
     ) as env_key:
         winreg.SetValueEx(env_key, API_KEY_ENV_NAME, 0, winreg.REG_SZ, api_key)
         winreg.SetValueEx(env_key, API_BASE_URL_ENV_NAME, 0, winreg.REG_SZ, base_url)
+
+    broadcast_environment_change()
+
+
+def write_user_claude_environment(api_key):
+    if not sys.platform.startswith("win"):
+        return
+
+    import winreg
+
+    with winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        "Environment",
+        0,
+        winreg.KEY_SET_VALUE,
+    ) as env_key:
+        winreg.SetValueEx(env_key, CLAUDE_AUTH_TOKEN_ENV_NAME, 0, winreg.REG_SZ, api_key)
+        winreg.SetValueEx(env_key, CLAUDE_BASE_URL_ENV_NAME, 0, winreg.REG_SZ, CLAUDE_BASE_URL)
+        winreg.SetValueEx(env_key, CLAUDE_MODEL_DISCOVERY_ENV_NAME, 0, winreg.REG_SZ, "1")
 
     broadcast_environment_change()
 

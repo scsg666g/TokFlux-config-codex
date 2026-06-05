@@ -15,11 +15,21 @@ from .config import (
     WINDOW_MIN_SIZE,
     WINDOW_SIZE,
 )
-from .api_client import test_openai_connection
-from .codex_config import read_saved_api_key, write_codex_settings
+from .api_client import ensure_v1_base_url, test_claude_connection, test_codex_connection
+from .codex_config import (
+    read_saved_api_key,
+    read_saved_claude_api_key,
+    write_claude_settings,
+    write_codex_settings,
+)
 from .environment import check_environment
 from .environment_installer import build_node_install_command, stream_node_install_output
-from .installer import build_install_command, stream_install_output
+from .installer import (
+    build_claude_install_command,
+    build_install_command,
+    stream_claude_install_output,
+    stream_install_output,
+)
 
 
 class CodexInstallerApp:
@@ -59,6 +69,10 @@ class CodexInstallerApp:
         self.url_var = tk.StringVar(value=API_BASE_URL)
         self.key_var = tk.StringVar(value=read_saved_api_key())
         self.key_display_var = tk.StringVar(value=self.mask_api_key(self.key_var.get()))
+        self.claude_key_var = tk.StringVar(value=read_saved_claude_api_key())
+        self.claude_key_display_var = tk.StringVar(
+            value=self.mask_api_key(self.claude_key_var.get())
+        )
 
         self.build_ui()
         self.build_context_menu()
@@ -340,7 +354,7 @@ class CodexInstallerApp:
 
         form_entry_font = ("Microsoft YaHei UI", 10)
 
-        ttk.Label(input_panel, text="API 请求地址：", style="Form.TLabel").grid(
+        ttk.Label(input_panel, text="TokFlux API 请求地址：", style="Form.TLabel").grid(
             row=0,
             column=0,
             sticky=tk.E,
@@ -363,7 +377,7 @@ class CodexInstallerApp:
             ipady=2,
         )
 
-        ttk.Label(input_panel, text="API Key：", style="Form.TLabel").grid(
+        ttk.Label(input_panel, text="Codex API Key：", style="Form.TLabel").grid(
             row=1,
             column=0,
             sticky=tk.E,
@@ -384,6 +398,29 @@ class CodexInstallerApp:
             style="Purple.TButton",
         )
         self.save_config_button.grid(row=1, column=2, sticky=tk.E, padx=(8, 0))
+
+        ttk.Label(input_panel, text="Claude API Key：", style="Form.TLabel").grid(
+            row=2,
+            column=0,
+            sticky=tk.E,
+            padx=(0, 8),
+            pady=(12, 0),
+        )
+        self.claude_key_entry = ttk.Entry(
+            input_panel,
+            textvariable=self.claude_key_display_var,
+            width=42,
+            state="readonly",
+            font=form_entry_font,
+        )
+        self.claude_key_entry.grid(row=2, column=1, sticky=tk.EW, pady=(12, 0), ipady=2)
+        self.save_claude_config_button = ttk.Button(
+            input_panel,
+            text="修改 API Key",
+            command=self.show_claude_api_key_dialog,
+            style="Purple.TButton",
+        )
+        self.save_claude_config_button.grid(row=2, column=2, sticky=tk.E, padx=(8, 0), pady=(12, 0))
         input_panel.columnconfigure(1, weight=1)
 
         button_row = ttk.Frame(main, style="App.TFrame")
@@ -404,6 +441,14 @@ class CodexInstallerApp:
             state=tk.DISABLED,
         )
         self.install_button.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.install_claude_button = ttk.Button(
+            button_row,
+            text="安装 Claude",
+            command=self.install_claude,
+            state=tk.DISABLED,
+        )
+        self.install_claude_button.pack(side=tk.LEFT, padx=(16, 0))
 
         self.clear_button = ttk.Button(button_row, text="清空日志", command=self.clear_log)
         self.clear_button.pack(side=tk.RIGHT)
@@ -445,6 +490,8 @@ class CodexInstallerApp:
 
         self.key_var.set(read_saved_api_key())
         self.key_display_var.set(self.mask_api_key(self.key_var.get()))
+        self.claude_key_var.set(read_saved_claude_api_key())
+        self.claude_key_display_var.set(self.mask_api_key(self.claude_key_var.get()))
         self.check_environment()
 
     def set_busy(self, is_busy):
@@ -452,8 +499,10 @@ class CodexInstallerApp:
         self.check_button.config(state=state)
         self.clear_button.config(state=state)
         self.save_config_button.config(state=state)
+        self.save_claude_config_button.config(state=state)
         if is_busy:
             self.install_button.config(state=tk.DISABLED)
+            self.install_claude_button.config(state=tk.DISABLED)
 
     def append_log(self, text):
         self.log.config(state=tk.NORMAL)
@@ -480,6 +529,7 @@ class CodexInstallerApp:
                     self.npm_var.set(payload)
                 elif kind == "install_ready":
                     self.install_button.config(state=tk.NORMAL if payload else tk.DISABLED)
+                    self.install_claude_button.config(state=tk.NORMAL if payload else tk.DISABLED)
                 elif kind == "busy":
                     self.set_busy(payload)
                 elif kind == "message":
@@ -506,17 +556,35 @@ class CodexInstallerApp:
         self.output_queue.put(("status", "正在测试 API 连接..."))
         self.output_queue.put(("install_ready", False))
         base_url = self.url_var.get().strip()
-        api_key = self.key_var.get().strip()
+        codex_api_key = self.key_var.get().strip()
+        claude_api_key = self.claude_key_var.get().strip()
 
         def worker():
-            self.output_queue.put(("log", "正在测试 API 连接...\n"))
-            api_result = test_openai_connection(base_url, api_key)
+            self.output_queue.put(("log", "正在测试 API 连接...\n\n"))
+            api_ok = False
 
-            self.output_queue.put(("log", api_result.message + "\n"))
-            if api_result.detail:
-                self.output_queue.put(("log", f"{api_result.detail}\n"))
+            if codex_api_key:
+                self.output_queue.put(("log", "正在测试 Codex API...\n"))
+                codex_result = test_codex_connection(base_url, codex_api_key)
+                self.output_queue.put(("log", f"Codex API：{codex_result.message}\n"))
+                if codex_result.detail:
+                    self.output_queue.put(("log", f"{codex_result.detail}\n"))
+                self.output_queue.put(("log", "\n"))
+                api_ok = api_ok or codex_result.ok
 
-            if not api_result.ok:
+            if claude_api_key:
+                self.output_queue.put(("log", "正在测试 Claude API...\n"))
+                claude_result = test_claude_connection(base_url, claude_api_key)
+                self.output_queue.put(("log", f"Claude API：{claude_result.message}\n"))
+                if claude_result.detail:
+                    self.output_queue.put(("log", f"{claude_result.detail}\n"))
+                self.output_queue.put(("log", "\n"))
+                api_ok = api_ok or claude_result.ok
+
+            if not codex_api_key and not claude_api_key:
+                self.output_queue.put(("log", "请至少填写 Codex API Key 或 Claude API Key。\n"))
+
+            if not api_ok:
                 self.output_queue.put(("status", "API 连接失败"))
                 self.output_queue.put(("busy", False))
                 return
@@ -600,7 +668,7 @@ class CodexInstallerApp:
             )
 
     def install_codex(self):
-        base_url = self.url_var.get().strip()
+        base_url = ensure_v1_base_url(self.url_var.get().strip())
         api_key = self.key_var.get().strip()
         if not api_key:
             messagebox.showerror("缺少 key", "请先填写 key。")
@@ -648,7 +716,69 @@ class CodexInstallerApp:
                 self.output_queue.put(("log", f"认证文件：{auth_path}\n"))
                 self.output_queue.put(("log", "用户环境变量已更新：OPENAI_API_KEY / OPENAI_BASE_URL\n"))
                 self.output_queue.put(("log", "可以在终端运行：codex --version\n"))
+                self.output_queue.put(("install_ready", True))
                 self.output_queue.put(("message", ("安装完成", "Codex 已安装完成。", "info")))
+            else:
+                self.output_queue.put(("status", "安装失败"))
+                self.output_queue.put(("install_ready", True))
+                self.output_queue.put(("log", f"\n安装失败，npm 退出码：{return_code}\n"))
+                self.output_queue.put(
+                    ("message", ("安装失败", f"npm 安装失败，退出码：{return_code}", "error"))
+                )
+
+        self.run_worker(worker)
+
+    def install_claude(self):
+        api_key = self.claude_key_var.get().strip()
+        if not api_key:
+            messagebox.showerror("缺少 key", "请先填写 Claude API Key。")
+            return
+
+        if not messagebox.askyesno("确认安装", "现在开始全局安装 @anthropic-ai/claude-code 吗？"):
+            return
+
+        self.output_queue.put(("busy", True))
+        self.output_queue.put(("status", "正在安装 Claude..."))
+
+        def worker():
+            command = build_claude_install_command()
+            if not command:
+                self.fail_install("找不到 npm，请先安装 Node.js。")
+                return
+
+            self.output_queue.put(("log", "\n准备执行安装命令：\n"))
+            self.output_queue.put(("log", " ".join(command) + "\n\n"))
+
+            try:
+                return_code = stream_claude_install_output(
+                    lambda line: self.output_queue.put(("log", line))
+                )
+            except FileNotFoundError as exc:
+                self.fail_install(str(exc))
+                return
+
+            self.output_queue.put(("busy", False))
+
+            if return_code == 0:
+                try:
+                    settings_path = write_claude_settings(api_key)
+                except OSError as exc:
+                    self.output_queue.put(("status", "Claude 已安装，但配置写入失败"))
+                    self.output_queue.put(("log", f"\nClaude 已安装，但配置写入失败：{exc}\n"))
+                    self.output_queue.put(
+                        ("message", ("配置失败", f"Claude 已安装，但配置写入失败：{exc}", "error"))
+                    )
+                    return
+
+                self.output_queue.put(("status", "安装完成"))
+                self.output_queue.put(("log", "\nClaude 安装完成，配置已写入。\n"))
+                self.output_queue.put(("log", f"配置文件：{settings_path}\n"))
+                self.output_queue.put(
+                    ("log", "已写入：ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL\n")
+                )
+                self.output_queue.put(("log", "可以在终端运行：claude --version\n"))
+                self.output_queue.put(("install_ready", True))
+                self.output_queue.put(("message", ("安装完成", "Claude 已安装完成。", "info")))
             else:
                 self.output_queue.put(("status", "安装失败"))
                 self.output_queue.put(("install_ready", True))
@@ -729,6 +859,76 @@ class CodexInstallerApp:
         self.append_log("用户环境变量已更新：OPENAI_API_KEY / OPENAI_BASE_URL\n")
         self.append_log("如果旧终端仍使用旧 key，请重新打开终端。\n")
         messagebox.showinfo("保存完成", "新的 API Key 已保存。")
+        return True
+
+    def show_claude_api_key_dialog(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("修改 Claude API Key")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        content = ttk.Frame(dialog, padding=16)
+        content.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            content,
+            text="请输入新的 Claude API Key：",
+            font=("Microsoft YaHei UI", 10),
+        ).pack(anchor=tk.W)
+
+        new_key_var = tk.StringVar(value=self.claude_key_var.get())
+        key_entry = ttk.Entry(
+            content,
+            textvariable=new_key_var,
+            width=46,
+            show="*",
+            font=("Microsoft YaHei UI", 10),
+        )
+        key_entry.pack(fill=tk.X, pady=(8, 14), ipady=2)
+
+        button_row = ttk.Frame(content)
+        button_row.pack(fill=tk.X)
+
+        def on_save():
+            api_key = new_key_var.get().strip()
+            if self.save_claude_config(api_key):
+                dialog.destroy()
+
+        ttk.Button(button_row, text="取消", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(button_row, text="保存", command=on_save).pack(side=tk.RIGHT, padx=(0, 8))
+
+        dialog.bind("<Return>", lambda _event: on_save())
+        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        key_entry.focus_set()
+
+        self.root.update_idletasks()
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() - dialog.winfo_width()) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - dialog.winfo_height()) // 2
+        dialog.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+    def save_claude_config(self, api_key):
+        if not api_key:
+            messagebox.showerror("缺少 key", "请先填写新的 Claude API Key。")
+            return False
+
+        try:
+            settings_path = write_claude_settings(api_key)
+        except OSError as exc:
+            messagebox.showerror("保存失败", f"Claude 配置写入失败：{exc}")
+            self.status_var.set("Claude 配置写入失败")
+            self.append_log(f"\nClaude 配置写入失败：{exc}\n")
+            return False
+
+        self.claude_key_var.set(api_key)
+        self.claude_key_display_var.set(self.mask_api_key(api_key))
+        self.status_var.set("Claude 配置已更新")
+        self.append_log("\nClaude 配置已更新。\n")
+        self.append_log(f"配置文件：{settings_path}\n")
+        self.append_log("已写入：ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL\n")
+        self.append_log("如果旧终端仍使用旧 key，请重新打开终端。\n")
+        messagebox.showinfo("保存完成", "新的 Claude API Key 已保存。")
         return True
 
     def fail_install(self, message):
