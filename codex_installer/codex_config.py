@@ -28,6 +28,21 @@ def get_auth_path():
     return get_codex_home() / "auth.json"
 
 
+def read_saved_api_key():
+    auth_path = get_auth_path()
+    if auth_path.exists():
+        try:
+            data = json.loads(auth_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+
+        api_key = data.get(API_KEY_ENV_NAME, "")
+        if isinstance(api_key, str) and api_key.strip():
+            return api_key.strip()
+
+    return os.environ.get(API_KEY_ENV_NAME, "").strip()
+
+
 def write_codex_settings(base_url, api_key, persist_environment=True):
     codex_home = get_codex_home()
     codex_home.mkdir(parents=True, exist_ok=True)
