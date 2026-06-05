@@ -215,7 +215,7 @@ class CodexInstallerApp:
         self.splash_original_image = image
         self.splash_window = tk.Toplevel(self.root)
         self.splash_window.overrideredirect(True)
-        transparent_color = "#00ff01"
+        transparent_color = "#101119"
         self.splash_window.configure(bg=transparent_color)
         self.splash_window.attributes("-topmost", True)
         try:
@@ -236,19 +236,18 @@ class CodexInstallerApp:
         text_x = splash_size // 2
         text_y = 146
         text_font = ("Microsoft YaHei UI", 11, "bold")
-        for offset_x, offset_y in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            self.splash_canvas.create_text(
-                text_x + offset_x,
-                text_y + offset_y,
-                text=APP_TITLE,
-                fill="#000000",
-                font=text_font,
-            )
+        self.splash_canvas.create_text(
+            text_x + 1,
+            text_y + 1,
+            text=APP_TITLE,
+            fill="#10182a",
+            font=text_font,
+        )
         self.splash_canvas.create_text(
             text_x,
             text_y,
             text=APP_TITLE,
-            fill="#ffffff",
+            fill="#f4fbff",
             font=text_font,
         )
 
